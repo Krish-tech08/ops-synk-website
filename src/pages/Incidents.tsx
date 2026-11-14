@@ -4,8 +4,24 @@ import { api, org, q, type Incident, type Project } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { Card, Empty, ErrorBox, Loading } from "../components/ui";
 import { timeAgo } from "../lib/format";
+import { Explain } from "../lib/explain";
 
 const SEV = { sev1: "Sev 1 · critical", sev2: "Sev 2 · high", sev3: "Sev 3 · medium", sev4: "Sev 4 · low" } as const;
+
+const SEV_COLORS: Record<string, string> = { sev1: "#C2412D", sev2: "#D9682B", sev3: "#C98A1B", sev4: "#A8A29A" };
+/** Severity distribution of incidents that are not resolved. */
+function SEV_BAR(list: Incident[]) {
+  const open = list.filter((i) => i.status !== "resolved");
+  if (!open.length) return null;
+  const counts = (Object.keys(SEV) as Array<keyof typeof SEV>).map((k) => ({ k, n: open.filter((i) => i.severity === k).length })).filter((x) => x.n);
+  return (
+    <div className="sevbar-wrap">
+      <span className="label">{open.length} unresolved incident{open.length > 1 ? "s" : ""} by severity</span>
+      <div className="sevbar">{counts.map((c) => <div key={c.k} style={{ flex: c.n, background: SEV_COLORS[c.k] }} title={`${SEV[c.k]}: ${c.n}`}>{c.n}</div>)}</div>
+      <div className="hm-legend">{counts.map((c) => <span key={c.k}><i style={{ background: SEV_COLORS[c.k] }} />{SEV[c.k]}</span>)}</div>
+    </div>
+  );
+}
 
 export function IncidentsPage({ projects }: { projects: Project[] }) {
   const list = useApi<Incident[]>(`/api/v1/incidents${q({ limit: 100 })}`);
@@ -34,6 +50,10 @@ export function IncidentsPage({ projects }: { projects: Project[] }) {
   return (
     <div className="page">
       <div className="page-head"><div><h1>Incidents</h1><p className="muted">Record an incident, then let the agents investigate it with the related project’s data.</p></div></div>
+      <Explain>An <strong>incident</strong> is something going wrong for real users <em>right now</em>, for example “customers can’t pay”.
+        Severity goes from <strong>Sev 1</strong> (everything is down) to <strong>Sev 4</strong> (minor). Report one on the right, then press
+        <strong> Investigate with AI</strong>: the agents look for likely causes such as a recent failed build or a related bug.</Explain>
+      {SEV_BAR(list.data ?? [])}
       {error && <div className="error-box">{error}</div>}
       <div className="grid-incidents">
         <Card title="Open and recent incidents">

@@ -1,10 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { AgentGraph, agentDescription, agentTitle, useDemoRun } from "../components/viz";
+import { Explain } from "../lib/explain";
 import { Card, ErrorBox, Loading } from "../components/ui";
 import { AGENT_LABEL, AGENT_ROLE } from "../lib/format";
 import { useAuth, friendlyAuthError } from "../lib/auth";
 import { config } from "../config";
 
 export function AgentsPage() {
+  const demo = useDemoRun();
+  const [sel, setSel] = useState<string | null>("manager");
   const rules = [
     ["Numbers come from code, not AI", "Health scores, counts, staleness and CI rates are calculated by fixed, documented rules. Gemini only plans, summarises and drafts recommendations."],
     ["Every claim has evidence", "Agents collect data through approved read-only tools. Each finding cites the exact pull request, issue, workflow run or task it is based on."],
@@ -16,14 +21,19 @@ export function AgentsPage() {
   return (
     <div className="page">
       <div className="page-head"><div><h1>How the agents work</h1><p className="muted">Six small specialist agents cooperate on each investigation.</p></div></div>
+      <Explain>An <strong>AI agent</strong> is an AI program with one narrow job and limited, read-only access. Instead of one big AI guessing,
+        OpsSynk uses a <em>team</em>: a manager, four specialists and a fact-checker, like a hospital with a GP, specialists and a second-opinion doctor.
+        Press <strong>Play animation</strong> to see the hand-offs.</Explain>
       <div className="agent-grid">
         {Object.keys(AGENT_LABEL).map((a, i) => (
           <Card key={a}><div className="agent-num">{i + 1}</div><h3>{AGENT_LABEL[a]} agent</h3><p className="muted">{AGENT_ROLE[a]}</p></Card>
         ))}
       </div>
-      <Card title="Flow">
-        <div className="flow">{["Your question", "Manager plans", "GitHub + Project agents", "Bug + DevOps agents", "Evidence check + Review", "Report with recommendations"].map((s, i, arr) => (
-          <span key={s} className="flow-step">{s}{i < arr.length - 1 && <span className="arrow">→</span>}</span>))}</div>
+      <Card title="How a question flows through the agents" action={
+        <button className="btn small primary" disabled={demo.running} onClick={() => { demo.reset(); setTimeout(demo.start, 50); }}>{demo.running ? "Running…" : "▶ Play animation"}</button>}>
+        <AgentGraph statuses={demo.statuses} selected={sel} onSelect={setSel} />
+        <div className="graph-caption">{demo.caption || (sel ? <><strong>{agentTitle(sel)}:</strong> {agentDescription(sel)}</> : "Click any box to learn what it does.")}</div>
+        <p className="muted small">Illustration of a typical run. Open any real investigation to watch this graph light up live.</p>
       </Card>
       <div className="grid-3">{rules.map(([t, d]) => <Card key={t} title={t}><p className="muted">{d}</p></Card>)}</div>
     </div>
@@ -94,6 +104,7 @@ export function LoginPage() {
         </>)}
         {error && <div className="error-box">{error}</div>}
         <button className="btn primary full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+        <Link to="/learn" className="login-learn">🎓 New to DevOps? Open the 5-minute visual guide →</Link>
       </form>
     </div>
   );

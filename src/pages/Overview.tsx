@@ -3,14 +3,17 @@ import { Link, useNavigate } from "react-router-dom";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, q, type Category, type CompanyHealth, type HealthStatus, type Investigation, type ProjectHealth } from "../lib/api";
 import { useApi } from "../lib/useApi";
-import { Card, CategoryBars, DemoBadge, Empty, ErrorBox, HealthGauge, Kpi, Loading, StatusBadge } from "../components/ui";
+import { Card, DemoBadge, Empty, ErrorBox, HealthGauge, Kpi, Loading, StatusBadge } from "../components/ui";
 import { STATUS_COLOR, STATUS_LABEL, pct, scoreColor, timeAgo } from "../lib/format";
+import { DEFINE, Explain, InfoTip } from "../lib/explain";
+import { HealthHeatmap, ScoreBreakdown } from "../components/viz";
 
 export function Overview({ onNewInvestigation }: { onNewInvestigation: () => void }) {
   const company = useApi<CompanyHealth>(`/api/v1/analytics/company${q({})}`);
   const projects = useApi<ProjectHealth[]>(`/api/v1/analytics/projects${q({})}`);
   const investigations = useApi<Investigation[]>(`/api/v1/agents/investigations${q({ limit: 5 })}`);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const nav = useNavigate();
 
   if (company.loading && !company.data) return <Loading label="Calculating engineering health from GitHub and project data…" />;
   if (company.error) return <ErrorBox message={company.error.message} onRetry={company.reload} />;
@@ -41,26 +44,32 @@ export function Overview({ onNewInvestigation }: { onNewInvestigation: () => voi
         </div>
       </div>
 
+      <Explain title="What is this page? (start here)">
+        Think of this as a <strong>health check-up for a software company</strong>. OpsSynk reads the team’s real GitHub activity and task lists and
+        rates every project from 0 to 100, like a report card. <span style={{ color: STATUS_COLOR.healthy }}>Green</span> means things are running smoothly,
+        <span style={{ color: STATUS_COLOR.warning }}> amber</span> needs attention, <span style={{ color: STATUS_COLOR.critical }}>red</span> is at risk.
+        Hover any <span className="infotip static">?</span> for a definition, or open <strong>DevOps 101</strong> in the sidebar for the visual guide.
+      </Explain>
+
       <div className="grid-2">
-        <Card title="Overall engineering health" action={<StatusBadge status={c.status} />}>
+        <Card title={<>Overall engineering health <InfoTip text={DEFINE.health} /></>} action={<StatusBadge status={c.status} />}>
           <div className="health-hero">
             <HealthGauge score={c.score} status={c.status} />
             <div>
               <p className="lead">{heroText(c)}</p>
-              <p className="muted small">Data coverage {pct(c.coverage)}{c.missingSignals.length ? `; missing: ${c.missingSignals.join(", ")}` : ""}. Bands: healthy ≥ {c.bands.healthy}, warning ≥ {c.bands.warning}.</p>
+              <p className="muted small">Data coverage <InfoTip text={DEFINE.coverage} /> {pct(c.coverage)}{c.missingSignals.length ? `; missing: ${c.missingSignals.join(", ")}` : ""}. Bands: healthy ≥ {c.bands.healthy}, warning ≥ {c.bands.warning}.</p>
             </div>
           </div>
         </Card>
-        <Card title="What drives the score">
-          <CategoryBars weights={c.weights} subScores={cats.map((k) => ({ category: k, score: c.categoryScores[k] ?? null, reason: null }))} />
-          <p className="muted small">Each category is the average across projects, weighted as shown. Scores are calculated by fixed rules, not by AI.</p>
+        <Card title={<>How the score is calculated <InfoTip text="Five areas are each scored 0–100 by fixed rules (not AI), multiplied by their weight, and added up." /></>}>
+          <ScoreBreakdown categoryScores={c.categoryScores} weights={c.weights} score={c.score} bands={c.bands} />
         </Card>
       </div>
 
       <Kpis projects={ps} company={c} />
 
       <div className="grid-2">
-        <Card title="Project scores">
+        <Card title={<>Project scores <InfoTip text="Each bar is one project’s overall health. Longer and greener is better." /></>}>
           {ps.length ? (
             <ResponsiveContainer width="100%" height={Math.max(220, ps.length * 28)}>
               <BarChart data={ps.map((p) => ({ name: p.projectName, score: p.score ?? 0, raw: p.score }))} layout="vertical" margin={{ left: 10, right: 20 }}>
@@ -77,6 +86,14 @@ export function Overview({ onNewInvestigation }: { onNewInvestigation: () => voi
           <LatestInvestigation list={investigations.data ?? []} onNew={onNewInvestigation} />
         </Card>
       </div>
+
+      {ps.length > 0 && (
+        <Card title={<>Health heatmap: every project × every area <InfoTip text="Each row is a project, each column one of the five health areas. Colour shows the score; hover a cell to see why, click a row to open the project." /></>}>
+          <Explain title="How to read the heatmap">Scan for <strong>red cells</strong>: they show exactly <em>which</em> part of <em>which</em> project is in trouble. A project can look fine overall but hide one red area.</Explain>
+          <HealthHeatmap onOpen={(id) => nav(`/projects/${id}`)}
+            rows={ps.map((p) => ({ id: p.projectId, name: p.projectName, score: p.score, cells: Object.fromEntries(p.subScores.map((x) => [x.category, { score: x.score, reason: x.reason }])) }))} />
+        </Card>
+      )}
 
       <ProjectBoard projects={ps} loading={projects.loading} />
     </div>
@@ -99,11 +116,11 @@ function Kpis({ projects, company }: { projects: ProjectHealth[]; company: Compa
   const overdue = sum((p) => p.evidence.overdueTasks.length);
   return (
     <div className="kpis">
-      <Kpi label="Active projects" value={projects.length} hint={`${company.projectCounts.healthy} healthy · ${company.projectCounts.warning} warning · ${company.projectCounts.critical} critical`} />
-      <Kpi label="Stale pull requests" value={stale} hint="No update for 7+ days" tone={stale ? STATUS_COLOR.warning : undefined} />
-      <Kpi label="Open bugs" value={bugs} hint={critBugs ? `${critBugs} critical` : "None critical"} tone={critBugs ? STATUS_COLOR.critical : undefined} />
-      <Kpi label="Recent CI failures" value={failed} hint="Latest failed runs (up to 5 per repository, last 14 days)" tone={failed ? STATUS_COLOR.critical : undefined} />
-      <Kpi label="Overdue tasks" value={overdue} hint="Open tasks past their due date" tone={overdue ? STATUS_COLOR.warning : undefined} />
+      <Kpi icon="📁" info={DEFINE.activeProjects} label="Active projects" value={projects.length} hint={`${company.projectCounts.healthy} healthy · ${company.projectCounts.warning} warning · ${company.projectCounts.critical} critical`} />
+      <Kpi icon="⏳" info={DEFINE.stalePr} label="Stale pull requests" value={stale} hint="No update for 7+ days" tone={stale ? STATUS_COLOR.warning : undefined} />
+      <Kpi icon="🐞" info={DEFINE.bugs} label="Open bugs" value={bugs} hint={critBugs ? `${critBugs} critical` : "None critical"} tone={critBugs ? STATUS_COLOR.critical : undefined} />
+      <Kpi icon="🧪" info={DEFINE.ci} label="Recent CI failures" value={failed} hint="Latest failed runs (up to 5 per repository, last 14 days)" tone={failed ? STATUS_COLOR.critical : undefined} />
+      <Kpi icon="⏰" info={DEFINE.overdue} label="Overdue tasks" value={overdue} hint="Open tasks past their due date" tone={overdue ? STATUS_COLOR.warning : undefined} />
     </div>
   );
 }
@@ -161,7 +178,7 @@ function ProjectBoard({ projects, loading }: { projects: ProjectHealth[]; loadin
       </div>
       {loading && !projects.length ? <Loading /> : (
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>Project</th><th>Health</th><th>Status</th><th>Stale PRs</th><th>Open bugs</th><th>CI health</th><th>Overdue tasks</th><th>Coverage</th></tr></thead>
+          <thead><tr><th>Project</th><th>Health</th><th>Status</th><th>Stale PRs <InfoTip text={DEFINE.stalePr} /></th><th>Open bugs <InfoTip text={DEFINE.bugs} /></th><th>CI health <InfoTip text={DEFINE.ci} /></th><th>Overdue tasks <InfoTip text={DEFINE.overdue} /></th><th>Coverage <InfoTip text={DEFINE.coverage} /></th></tr></thead>
           <tbody>
             {rows.map((p) => (
               <tr key={p.projectId} className="clickable" onClick={() => nav(`/projects/${p.projectId}`)}>

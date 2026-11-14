@@ -3,6 +3,7 @@ import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 
 import { q, type Repo } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { Card, DemoBadge, Empty, ErrorBox, Kpi, Loading } from "../components/ui";
+import { DEFINE, Explain, InfoTip } from "../lib/explain";
 import { STATUS_COLOR, fmtDate, pct, timeAgo } from "../lib/format";
 
 export function RepositoriesPage() {
@@ -12,6 +13,8 @@ export function RepositoriesPage() {
   return (
     <div className="page">
       <div className="page-head"><div><h1>Repositories</h1><p className="muted">{repos.data!.length} repositories in the connected GitHub organization. <DemoBadge show={repos.meta?.isDemoData} /></p></div></div>
+      <Explain>A <strong>repository</strong> is a project’s folder of code on GitHub, including the full history of every change.
+        This list comes live from GitHub. Open one to see its automated test results, pending code reviews and recent activity.</Explain>
       <Card>
         <table className="table"><thead><tr><th>Repository</th><th>Default branch</th><th>Last push</th><th></th></tr></thead><tbody>
           {repos.data!.map((r) => (
@@ -49,15 +52,17 @@ export function RepositoryDetail() {
     <div className="page">
       <Link to="/repositories" className="back">← All repositories</Link>
       <div className="page-head"><div><h1>{r.id} <DemoBadge show={d.meta?.isDemoData} /></h1><p className="muted"><a href={r.url} target="_blank" rel="noreferrer">{r.fullName} ↗</a> · branch {r.defaultBranch}</p></div></div>
+      <Explain>These numbers come straight from GitHub. The coloured bars below show the repository’s recent <strong>automatic build-and-test runs</strong>:
+        each bar is one run, green passed and red failed. Lots of red means changes keep breaking things.</Explain>
       <div className="kpis">
-        <Kpi label="Open issues" value={s.openIssues ?? "—"} hint={`${s.openBugs ?? 0} labelled as bugs (PRs excluded)`} />
-        <Kpi label="Open pull requests" value={s.openPullRequests ?? "—"} hint={`${s.stalePullRequests ?? 0} stale`} tone={s.stalePullRequests ? STATUS_COLOR.warning : undefined} />
-        <Kpi label="CI pass rate" value={s.ci?.successRate == null ? "—" : pct(s.ci.successRate)} hint={s.ci ? `${s.ci.successes}/${s.ci.considered} runs, last 14 days` : "No CI data"}
+        <Kpi icon="🎫" info={DEFINE.issues} label="Open issues" value={s.openIssues ?? "—"} hint={`${s.openBugs ?? 0} labelled as bugs (PRs excluded)`} />
+        <Kpi icon="🔀" info={DEFINE.openPrs} label="Open pull requests" value={s.openPullRequests ?? "—"} hint={`${s.stalePullRequests ?? 0} stale`} tone={s.stalePullRequests ? STATUS_COLOR.warning : undefined} />
+        <Kpi icon="🧪" info={DEFINE.passRate} label="CI pass rate" value={s.ci?.successRate == null ? "—" : pct(s.ci.successRate)} hint={s.ci ? `${s.ci.successes}/${s.ci.considered} runs, last 14 days` : "No CI data"}
           tone={s.ci?.successRate == null ? undefined : s.ci.successRate >= 0.8 ? STATUS_COLOR.healthy : STATUS_COLOR.critical} />
-        <Kpi label="Commits (14 days)" value={s.activity?.commitsInWindow ?? "—"} hint={`Last activity ${timeAgo(s.activity?.lastActivityAt)}`} />
+        <Kpi icon="💾" info={DEFINE.commits} label="Commits (14 days)" value={s.activity?.commitsInWindow ?? "—"} hint={`Last activity ${timeAgo(s.activity?.lastActivityAt)}`} />
       </div>
       <div className="grid-2">
-        <Card title="Recent workflow runs">
+        <Card title={<>Recent workflow runs <InfoTip text={DEFINE.ci} /></>}>
           {runData.length ? (<>
             <ResponsiveContainer width="100%" height={120}>
               <BarChart data={runData}><XAxis dataKey="name" tick={{ fontSize: 10 }} interval="preserveStartEnd" /><YAxis hide domain={[0, 1]} />
@@ -67,7 +72,7 @@ export function RepositoryDetail() {
             <p className="muted small">Green = passed, red = failed, grey = cancelled or in progress. {s.ci && s.ci.consecutiveFailures >= 2 && <span className="warn">The last {s.ci.consecutiveFailures} runs failed.</span>}</p>
           </>) : <Empty>No workflow runs in the last 14 days.</Empty>}
         </Card>
-        <Card title="Deployments">
+        <Card title={<>Deployments <InfoTip text="A deployment is installing a new version on the live servers customers use." /></>}>
           {typeof s.deployments === "string" ? (
             <Empty>{s.deployments === "no_deployment_data" ? "No GitHub deployment records for this repository, so deployment health is not assessed (only build status is known)." : "Deployment data unavailable."}</Empty>
           ) : (

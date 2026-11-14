@@ -4,6 +4,7 @@ import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, Responsi
 import { api, org, q, type Project, type ProjectHealth, type Repo, type Task } from "../lib/api";
 import { useApi } from "../lib/useApi";
 import { Card, CategoryBars, DemoBadge, Empty, ErrorBox, HealthGauge, Loading, StatusBadge } from "../components/ui";
+import { DEFINE, Explain, InfoTip } from "../lib/explain";
 import { fmtDate, pct, scoreColor, timeAgo } from "../lib/format";
 
 export function ProjectsPage() {
@@ -19,6 +20,8 @@ export function ProjectsPage() {
         <div><h1>Projects</h1><p className="muted">{projects.data!.length} projects. Click one to see why it has its score.</p></div>
         <button className="btn primary" onClick={() => setAdding(true)}>+ Add project</button>
       </div>
+      <Explain>Each card is one software project (for example a mobile app or a website) linked to its code on GitHub.
+        The big number is its <strong>health score</strong> out of 100. Click a card to see exactly <em>why</em> it got that score.</Explain>
       <div className="project-grid">
         {projects.data!.map((p) => {
           const h = byId.get(p.id);
@@ -94,6 +97,11 @@ export function ProjectDetail({ onInvestigate }: { onInvestigate: (projectId: st
         <button className="btn dark" onClick={() => onInvestigate(p.id)}>✦ Run AI investigation</button>
       </div>
 
+      <Explain title="Reading a project’s health">
+        <strong>Left:</strong> the overall score. <strong>Middle:</strong> the radar (“spider”) chart; the bigger and rounder the orange shape, the healthier the project.
+        A dent shows the weak area. <strong>Right:</strong> each area’s score with the reason. Below that is the <em>evidence</em>: the actual stuck pull requests, bugs,
+        failed builds and late tasks, each linked to GitHub.
+      </Explain>
       {health.error ? <ErrorBox message={health.error.message} onRetry={health.reload} /> : !h ? <Loading label="Calculating project health…" /> : (
         <>
           <div className="grid-3">
@@ -101,7 +109,7 @@ export function ProjectDetail({ onInvestigate }: { onInvestigate: (projectId: st
               <div className="center"><HealthGauge score={h.score} status={h.status} /></div>
               <p className="muted small center">Data coverage {pct(h.coverage)}{h.missingSignals.length ? ` · missing ${h.missingSignals.join(", ")}` : ""} · computed {timeAgo(h.computedAt)}</p>
             </Card>
-            <Card title="Health dimensions">
+            <Card title={<>Health dimensions <InfoTip text="Radar chart: each corner is one area, scored 0 (centre) to 100 (edge). A full pentagon = perfect health." /></>}>
               <ResponsiveContainer width="100%" height={230}>
                 <RadarChart data={radar} outerRadius={80}>
                   <PolarGrid /><PolarAngleAxis dataKey="dim" tick={{ fontSize: 11 }} /><PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
@@ -113,17 +121,17 @@ export function ProjectDetail({ onInvestigate }: { onInvestigate: (projectId: st
           </div>
 
           <div className="grid-2">
-            <Card title={`Stale pull requests (${h.evidence.stalePullRequests.length})`}>
+            <Card title={<>Stale pull requests ({h.evidence.stalePullRequests.length}) <InfoTip text={DEFINE.stalePr} /></>}>
               {h.evidence.stalePullRequests.length ? <ul className="ev-list">{h.evidence.stalePullRequests.map((x) => (
                 <li key={`${x.repositoryId}${x.number}`}><a href={x.url} target="_blank" rel="noreferrer">#{x.number} {x.title}</a><span className="muted small">{x.repositoryId} · idle {x.daysSinceUpdate} days</span></li>))}</ul>
                 : <Empty>No stale pull requests.</Empty>}
             </Card>
-            <Card title={`Open bugs (${h.evidence.openBugs.length})`}>
+            <Card title={<>Open bugs ({h.evidence.openBugs.length}) <InfoTip text={DEFINE.bugs} /></>}>
               {h.evidence.openBugs.length ? <ul className="ev-list">{h.evidence.openBugs.map((x) => (
                 <li key={`${x.repositoryId}${x.number}`}><a href={x.url} target="_blank" rel="noreferrer">#{x.number} {x.title}</a><span className={`sev-text s-${x.severity}`}>{x.severity}</span></li>))}</ul>
                 : <Empty>No open bugs.</Empty>}
             </Card>
-            <Card title={`Recent CI failures (${h.evidence.recentFailedRuns.length})`}>
+            <Card title={<>Recent CI failures ({h.evidence.recentFailedRuns.length}) <InfoTip text={DEFINE.ci} /></>}>
               {h.evidence.recentFailedRuns.length ? <ul className="ev-list">{h.evidence.recentFailedRuns.map((x) => (
                 <li key={x.id}><a href={x.url} target="_blank" rel="noreferrer">{x.name} run #{x.id}</a><span className="muted small">{x.repositoryId} · {x.conclusion} · {timeAgo(x.createdAt)}</span></li>))}</ul>
                 : <Empty>No failed runs in the last 14 days.</Empty>}

@@ -5,6 +5,8 @@ import { api, q, streamEvents, type Finding, type Investigation, type Investigat
 import { useApi } from "../lib/useApi";
 import { Card, CategoryBars, DemoBadge, Empty, ErrorBox, HealthGauge, KindBadge, Loading, SeverityBadge, StatusBadge } from "../components/ui";
 import { AGENT_LABEL, AGENT_ROLE, timeAgo } from "../lib/format";
+import { AgentGraph, agentDescription, agentTitle } from "../components/viz";
+import { Explain } from "../lib/explain";
 
 const TERMINAL = ["completed", "partial", "failed"];
 const STATUS_TEXT: Record<string, string> = { queued: "Queued", running: "Running", completed: "Completed", partial: "Partial (some data missing)", failed: "Failed" };
@@ -17,6 +19,8 @@ export function InvestigationsPage({ onNew }: { onNew: () => void }) {
         <div><h1>AI Investigations</h1><p className="muted">Ask a question; six agents gather evidence from GitHub and project data and write a verified report.</p></div>
         <button className="btn primary" onClick={onNew}>+ New investigation</button>
       </div>
+      <Explain>Instead of a manager digging through GitHub for hours, they type a question like <em>“Which projects are at risk?”</em>.
+        Six AI agents gather the facts and write a short report with proof. Open any row to replay it, or see <strong>How the agents work</strong> for the animated diagram.</Explain>
       <Card>
         {list.loading && !list.data ? <Loading /> : list.error ? <ErrorBox message={list.error.message} onRetry={list.reload} /> :
           !list.data!.length ? <Empty>No investigations yet. <button className="btn small primary" onClick={onNew}>Run the first one</button></Empty> : (
@@ -90,6 +94,11 @@ export function InvestigationDetail() {
             {live === "polling" && <span className="muted small">(live stream unavailable, refreshing every 2 s)</span>}</div>
         </div>
       </div>
+      <Explain title="What is happening here?">
+        You asked a question; six AI agents are now working on it. The diagram below lights up as each agent starts (orange) and finishes (green),
+        and the <strong>Live activity</strong> feed shows every step they take. When they finish, a report appears further down, and every finding links to its proof.
+      </Explain>
+      <LiveGraph inv={inv} running={running} />
       <div className="grid-pipeline">
         <Pipeline inv={inv} events={events} />
         <ActivityFeed events={events} running={running} />
@@ -97,6 +106,19 @@ export function InvestigationDetail() {
       {inv.status === "failed" && <div className="error-box">{inv.errorSummary ?? "The investigation failed."}</div>}
       {inv.finalReport && <ReportView report={inv.finalReport} />}
     </div>
+  );
+}
+
+function LiveGraph({ inv, running }: { inv: Investigation; running: boolean }) {
+  const [sel, setSel] = useState<string | null>(null);
+  const st: Record<string, any> = { question: "completed" };
+  for (const a of ["manager", "github", "project", "bug", "devops", "review"]) st[a] = inv.agentStatuses[a] ?? (running ? "pending" : "skipped");
+  st.report = inv.finalReport ? "completed" : inv.status === "failed" ? "failed" : st.review === "completed" ? "running" : "pending";
+  return (
+    <Card title={<>Agent map {running && <span className="pulse" />}</>}>
+      <AgentGraph statuses={st} selected={sel} onSelect={setSel} />
+      <div className="graph-caption">{sel ? <><strong>{agentTitle(sel)}:</strong> {agentDescription(sel)} · status: <strong>{st[sel]}</strong></> : "Click a box to see what that agent does."}</div>
+    </Card>
   );
 }
 
@@ -171,6 +193,10 @@ function ReportView({ report }: { report: Report }) {
 
   return (
     <div className="report">
+      <Explain title="How to read this report">
+        Start with the <strong>executive summary</strong>, then the <strong>recommended actions</strong> (“Do now” first). Each recommendation lists the findings
+        it is based on; click one to jump to its evidence. <strong>Verified facts</strong> were seen directly in the data; <strong>hypotheses</strong> are only guesses and are hidden by default.
+      </Explain>
       <div className="report-head">
         <span className="eyebrow">Engineering briefing · {report.status === "partial" ? "partial report" : "complete report"}</span>
         <DemoBadge show={report.dataProvenance.containsDemoData} />

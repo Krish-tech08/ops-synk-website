@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { Category, HealthStatus, SubScore } from "../lib/api";
 import { CATEGORY_LABEL, STATUS_COLOR, STATUS_LABEL, scoreColor } from "../lib/format";
+import { InfoTip } from "../lib/explain";
+import { CountUp, useMounted } from "./viz";
 
 export function Card({ title, action, children, className = "" }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
@@ -30,11 +32,11 @@ export function KindBadge({ kind, verification }: { kind: string; verification?:
 export const DemoBadge = ({ show }: { show: boolean }) =>
   show ? <span className="badge demo" title="Data comes from the labelled demo dataset, not live GitHub">Demo data</span> : null;
 
-export function Kpi({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string }) {
+export function Kpi({ label, value, hint, tone, info, icon }: { label: string; value: ReactNode; hint?: ReactNode; tone?: string; info?: ReactNode; icon?: string }) {
   return (
-    <div className="kpi">
-      <div className="label">{label}</div>
-      <div className="kpi-value" style={tone ? { color: tone } : undefined}>{value}</div>
+    <div className="kpi" style={tone ? { borderTopColor: tone } : undefined}>
+      <div className="label">{icon && <span className="kpi-icon">{icon}</span>}{label}{info && <InfoTip text={info} />}</div>
+      <div className="kpi-value" style={tone ? { color: tone } : undefined}><CountUp value={value} /></div>
       {hint && <div className="kpi-hint">{hint}</div>}
     </div>
   );
@@ -45,14 +47,15 @@ export function HealthGauge({ score, status, size = 190 }: { score: number | nul
   const r = 70, c = Math.PI * r;
   const v = score ?? 0;
   const color = STATUS_COLOR[status];
+  const mounted = useMounted();
   return (
     <svg width={size} height={size * 0.62} viewBox="0 0 180 112" role="img" aria-label={`Health score ${score ?? "not available"}`}>
       <path d="M20 100 A70 70 0 0 1 160 100" fill="none" stroke="#EDE7DE" strokeWidth="16" strokeLinecap="round" />
       {score !== null && (
         <path d="M20 100 A70 70 0 0 1 160 100" fill="none" stroke={color} strokeWidth="16" strokeLinecap="round"
-          strokeDasharray={`${(v / 100) * c} ${c}`} />
+          strokeDasharray={`${mounted ? (v / 100) * c : 0} ${c}`} style={{ transition: "stroke-dasharray 1.1s cubic-bezier(.2,.8,.2,1)" }} />
       )}
-      <text x="90" y="88" textAnchor="middle" fontSize="34" fontWeight="700" fill="#1F1D1A">{score === null ? "—" : Math.round(score)}</text>
+      <text x="90" y="88" textAnchor="middle" fontSize="34" fontWeight="700" fill="#1F1D1A">{score === null ? "—" : <CountUp value={Math.round(score)} />}</text>
       <text x="90" y="106" textAnchor="middle" fontSize="11" fill="#8A8F98">out of 100</text>
     </svg>
   );
@@ -60,6 +63,7 @@ export function HealthGauge({ score, status, size = 190 }: { score: number | nul
 
 /** Weighted category bars with the reason behind each score. */
 export function CategoryBars({ subScores, weights }: { subScores: Array<Pick<SubScore, "category" | "score" | "reason">>; weights?: Partial<Record<Category, number>> }) {
+  const mounted = useMounted();
   return (
     <div className="bars">
       {subScores.map((s) => (
@@ -68,7 +72,7 @@ export function CategoryBars({ subScores, weights }: { subScores: Array<Pick<Sub
             <span className="bar-name">{CATEGORY_LABEL[s.category]}{weights?.[s.category] !== undefined && <span className="chip">{Math.round(weights[s.category]! * 100)}% weight</span>}</span>
             <span className="bar-score" style={{ color: scoreColor(s.score) }}>{s.score === null ? "No data" : `${Math.round(s.score)}/100`}</span>
           </div>
-          <div className="bar-track"><div className="bar-fill" style={{ width: `${s.score ?? 0}%`, background: scoreColor(s.score) }} /></div>
+          <div className="bar-track"><div className="bar-fill" style={{ width: `${mounted ? s.score ?? 0 : 0}%`, background: scoreColor(s.score) }} /></div>
           {s.reason && <div className="bar-reason">{s.reason}</div>}
         </div>
       ))}

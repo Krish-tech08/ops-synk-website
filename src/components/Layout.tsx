@@ -3,8 +3,10 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { onSlowRequest } from "../lib/api";
 import { config } from "../config";
+import { useExplain } from "../lib/explain";
 
 const NAV = [
+  { section: "Start here", items: [["/learn", "DevOps 101 (visual guide)", "🎓"]] },
   { section: "Workspace", items: [["/", "Overview", "▦"], ["/projects", "Projects", "▢"], ["/repositories", "Repositories", "⑂"], ["/incidents", "Incidents", "⚠"]] },
   { section: "Intelligence", items: [["/investigations", "AI Investigations", "✦"], ["/agents", "How the agents work", "◎"]] },
   { section: "Account", items: [["/settings", "Settings & status", "⚙"]] },
@@ -14,6 +16,7 @@ export function Layout({ children, onNewInvestigation }: { children: ReactNode; 
   const { user, signOut } = useAuth();
   const [slow, setSlow] = useState(false);
   const loc = useLocation();
+  const explain = useExplain();
   useEffect(() => { const off = onSlowRequest(setSlow); return () => { off(); }; }, []);
   return (
     <div className="shell">
@@ -38,7 +41,12 @@ export function Layout({ children, onNewInvestigation }: { children: ReactNode; 
       <main className="main">
         <div className="topbar">
           <div className="crumb">OpsSynk › <strong>{titleFor(loc.pathname)}</strong></div>
-          <button className="btn primary" onClick={onNewInvestigation}>+ New Investigation</button>
+          <div className="row">
+            <button className={`explain-toggle ${explain.on ? "on" : ""}`} onClick={explain.toggle} title="Show plain-language explanations on every page">
+              <span className="toggle-track"><span /></span>💡 Explain mode
+            </button>
+            <button className="btn primary" onClick={onNewInvestigation}>+ New Investigation</button>
+          </div>
         </div>
         {slow && <div className="banner">Waking up the server… the free hosting tier sleeps when idle, so the first request can take up to a minute.</div>}
         <div className="content">{children}</div>
@@ -49,6 +57,7 @@ export function Layout({ children, onNewInvestigation }: { children: ReactNode; 
 
 function titleFor(p: string) {
   if (p === "/") return "Engineering Overview";
+  if (p.startsWith("/learn")) return "DevOps 101";
   if (p.startsWith("/projects")) return "Projects";
   if (p.startsWith("/repositories")) return "Repositories";
   if (p.startsWith("/investigations")) return "AI Investigations";

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { ExplainProvider } from "./lib/explain";
 import { q, setTokenProvider, type Project } from "./lib/api";
 import { useApi } from "./lib/useApi";
 import { Layout } from "./components/Layout";
@@ -12,19 +13,26 @@ import { InvestigationDetail, InvestigationsPage } from "./pages/Investigations"
 import { RepositoriesPage, RepositoryDetail } from "./pages/Repositories";
 import { IncidentsPage } from "./pages/Incidents";
 import { AgentsPage, LoginPage, SettingsPage } from "./pages/Static";
+import { LearnPage } from "./pages/Learn";
 
 function Shell() {
   const { user, ready, getToken } = useAuth();
+  const loc = useLocation();
   const [dialog, setDialog] = useState<{ projectId?: string } | null>(null);
   setTokenProvider(getToken);   // set during render so child pages' first requests already carry the token
   const projects = useApi<Project[]>(user ? `/api/v1/projects${q({ limit: 100 })}` : null);
   if (!ready) return <Loading label="Starting…" />;
-  if (!user) return <LoginPage />;
+  if (!user) {
+    // The DevOps guide needs no backend, so it is reachable before signing in.
+    if (loc.pathname === "/learn") return <PublicLearn />;
+    return <LoginPage />;
+  }
   const open = (projectId?: string) => setDialog({ projectId });
   return (
     <Layout onNewInvestigation={() => open()}>
       <Routes>
         <Route path="/" element={<Overview onNewInvestigation={() => open()} />} />
+        <Route path="/learn" element={<LearnPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetail onInvestigate={(id) => open(id)} />} />
         <Route path="/repositories" element={<RepositoriesPage />} />
@@ -41,6 +49,15 @@ function Shell() {
   );
 }
 
+function PublicLearn() {
+  return (
+    <div className="public-learn">
+      <div className="topbar"><div className="brand"><span className="logo">✓</span> OpsSynk</div><Link className="btn primary" to="/">Sign in to the dashboard →</Link></div>
+      <div className="content"><LearnPage /></div>
+    </div>
+  );
+}
+
 export default function App() {
-  return <AuthProvider><BrowserRouter><Shell /></BrowserRouter></AuthProvider>;
+  return <AuthProvider><ExplainProvider><BrowserRouter><Shell /></BrowserRouter></ExplainProvider></AuthProvider>;
 }
